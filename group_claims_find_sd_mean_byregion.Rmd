@@ -1,0 +1,50 @@
+---
+title: "FFS 'High to Low' Claims Analysis"
+author: "Tyson Ward"
+date: "November 13, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(dplyr)
+knitr::opts_chunk$set(echo = TRUE)
+claims <- read.csv("August_claims.csv", header = TRUE, sep = "|")
+
+##group claims by specialty, vendor, cpt code
+svcgrp <- group_by(claims, Region_Name, Specialty_Long_Name, Vendor_Name, Procedure_Code)
+
+##summarize above - counts and average for each combo
+averages <- summarise(svcgrp, count = n(), total_cost = sum(HCP_Cost), average = (sum(HCP_Cost)/n()))
+
+averages <- averages[(averages$average > 0),]
+
+
+## now take the mean across vendors, and the sd across vendors
+groups_avg_std <- group_by(averages, Region_Name, Specialty_Long_Name, Procedure_Code) %>% summarise(num_vendors = n(), mean = mean(average), sd = sd(average))
+
+##merge groups_avg_std and averages into one thing
+high_to_low <- merge(averages, groups_avg_std, by = c('Region_Name','Specialty_Long_Name', 'Procedure_Code'), all.x = TRUE)
+
+
+high_to_low$sd[is.na(high_to_low$sd)] <- 0
+
+high_to_low$normal <- ifelse(high_to_low$sd == 0, 0, (high_to_low$average - high_to_low$mean) / high_to_low$sd)
+
+high_to_low$cost_x_normal <- high_to_low$total_cost * high_to_low$normal
+
+vendors <- group_by(high_to_low, Region_Name, Specialty_Long_Name, Vendor_Name)
+vendors <- summarise(vendors, composite = (sum(total_cost * normal) / sum(total_cost)), total_cost = sum(total_cost))
+
+write.csv(high_to_low, "High_to_low.csv")
+write.csv(vendors, "vendors_scores.csv")
+
+
+```
+
+
+
+```{r cars}
+summary(cars)
+```
+
+
